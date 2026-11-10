@@ -7,6 +7,7 @@ from PySide6.QtCore import QMimeData, QPointF, QSettings, Qt, QUrl
 from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QApplication
 
+from gmode_fit.fitting import preset
 from gmode_fit.gui import MainWindow, append_row
 
 from conftest import DATA, needs_data
@@ -144,3 +145,25 @@ def test_append_row_adds_new_columns(tmp_path):
     append_row(p, {"a": 3, "c": "x"})
     rows = list(csv.DictReader(p.open()))
     assert rows == [{"a": "1", "b": "2.0", "c": ""}, {"a": "3", "b": "", "c": "x"}]
+
+
+@needs_data
+def test_delta_bic_against_previous_fit(window):
+    window.load_file(DATA / "Probe1_633nm_G.txt")
+    window.set_peaks(preset("semiconducting"))
+    window.auto_guess()
+    window.run_fit()
+    assert window._bic_ref is None                 # first fit: nothing to compare
+    assert "BIC = " in window.result_label.text()
+    window.preset_box.setCurrentIndex(window.preset_box.findData("metallic"))
+    window.apply_preset()
+    window.run_fit()
+    model, delta = window._bic_ref
+    assert model == "Voigt(G-) + Voigt(G+)" and delta < -10
+    assert "better" in window.result_label.text()
+    assert "ΔBIC" in window.log_view.toPlainText()
+    # a different range is different data: no comparison
+    lo, hi = window._range()
+    window._set_range(lo + 5, hi)
+    window.run_fit()
+    assert window._bic_ref is None

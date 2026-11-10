@@ -44,6 +44,10 @@ when it sits next to this folder and is not installed.
 4. **Fit** (Ctrl+F). The fitted values become the new start values, and *Revert*
    restores the previous ones. Parameters that end on a bound are reported, because
    their errors are then unreliable.
+   - **BIC** (n·ln(χ²/n) + k·ln n) appears in the log and above the table, with
+     **ΔBIC against the previous fit** when it used the same data points (same file,
+     offset and range). Below −10 the new model is clearly better, above +10 clearly
+     worse; in between, prefer the simpler or physically motivated model.
 5. **Export.**
    - *Export results (CSV)* writes the peak table with values, errors and derived
      quantities. Every parameter, bound and setting goes in `#` header lines.
@@ -90,3 +94,18 @@ tests/                   pytest (synthetic spectra + real spectra in tests/testd
 ```
 
 Run the tests with `python -m pytest tests`.
+
+## Building the exe
+
+A stand-alone `G-Mode-Fit.exe` (no Python needed on the target PC) is built with
+PyInstaller from the repository folder:
+
+```bash
+pip install pyinstaller
+python -m PyInstaller packaging/G-Mode-Fit.spec --distpath dist --workpath build --noconfirm
+```
+
+The result is `dist/G-Mode-Fit.exe` (about 107 MB). It is a one-file build, so each
+start first unpacks itself to a temporary folder, which takes about 10–15 s.
+Spectra can be dropped onto the exe or onto its window. `build/` can be deleted
+afterwards.

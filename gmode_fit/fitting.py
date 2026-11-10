@@ -341,6 +341,21 @@ class FitResult:
     def x_range(self) -> tuple[float, float]:
         return float(self.x[0]), float(self.x[-1])
 
+    @property
+    def bic(self) -> float:
+        """Bayesian information criterion, n·ln(χ²/n) + k·ln(n) (k: free parameters incl. baseline).
+
+        Only differences between fits of the *same* data points are meaningful:
+        the model with the lower BIC is preferred; ΔBIC > 10 is strong evidence.
+        """
+        n = len(self.x)
+        return n * np.log(self.chi2 / n) + self.n_free * np.log(n) if self.chi2 > 0 else np.nan
+
+    def same_data(self, other: FitResult | None) -> bool:
+        """``True`` when ``other`` was fitted to the identical data points (BIC comparable)."""
+        return (other is not None and other.x.shape == self.x.shape
+                and np.array_equal(other.x, self.x) and np.array_equal(other.y, self.y))
+
     # ---------------------------------------------------------- propagation
     def _vector(self) -> np.ndarray:
         vec = np.zeros(len(self._index))
@@ -461,6 +476,8 @@ class FitResult:
         out["ratio_Gminus_Gplus"], out["ratio_err"] = self.ratio()
         out["R2"] = self.r2
         out["chi2_red"] = self.redchi
+        out["BIC"] = self.bic
+        out["n_free"] = self.n_free
         out["n_points"] = len(self.x)
         out["converged"] = self.success
         return out

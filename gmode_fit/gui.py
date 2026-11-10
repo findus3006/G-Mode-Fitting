@@ -282,6 +282,8 @@ class MainWindow(QMainWindow):
         self._path: Path | None = None
         self.result: FitResult | None = None
         self._pre_fit: list[Peak] | None = None
+        self._last_fit: FitResult | None = None       # reference for ΔBIC
+        self._bic_ref: tuple[str, float] | None = None
         self.editors: list[PeakEditor] = []
         self._artists: list = []
         self._span = None
@@ -458,6 +460,13 @@ class MainWindow(QMainWindow):
         self.result_label = QLabel("")
         self.result_label.setWordWrap(True)
         self.result_label.setTextFormat(Qt.TextFormat.RichText)
+        self.result_label.setToolTip(
+            "BIC = n·ln(χ²/n) + k·ln(n): goodness of fit with a penalty per free parameter "
+            "(k, incl. baseline).\nOnly differences matter, and only between fits of the same "
+            "data points (same file, offset and range).\nΔBIC compares with the previous fit: "
+            "below −10 the new model is clearly better, above +10 clearly worse;\nin between "
+            "the data cannot tell the models apart – prefer the simpler or physically "
+            "motivated one.")
         self.table = QTableWidget(0, 8)
         self.table.setHorizontalHeaderLabels(
             ["Label", "Type", "Maximum (cm⁻¹)", "ω₀ (cm⁻¹)", "FWHM (cm⁻¹)",
@@ -797,13 +806,19 @@ class MainWindow(QMainWindow):
             self.ctx.log.error(f"Fit failed: {exc}")
             QMessageBox.warning(self, "Fit", f"The fit failed:\n{exc}")
             return
+        # ΔBIC only against a previous fit of the identical data points.
+        prev = self._last_fit
+        self._bic_ref = ((self._model_text(prev.peaks), result.bic - prev.bic)
+                         if result.same_data(prev) else None)
+        self._last_fit = result
         self._pre_fit = peaks
         self.result = result
         self.set_peaks(result.peaks, result.errors)
         level = self.ctx.log.info if result.success else self.ctx.log.warning
         level(f"Fit {'converged' if result.success else 'did not converge'} "
-              f"({result.nfev} evaluations): R² = {result.r2:.5f}, "
-              f"χ²_red = {result.redchi:.4g}.")
+              f"({result.nfev} evaluations): {self._model_text(result.peaks)}: "
+              f"R² = {result.r2:.5f}, χ²_red = {result.redchi:.4g}, "
+              f"{self._bic_text(plain=True)}.")
         if result.at_bounds:
             self.ctx.log.warning("At a bound (error unreliable; widen the bound or fix the "
                                  "parameter): " + ", ".join(result.at_bounds))
@@ -944,6 +959,7 @@ class MainWindow(QMainWindow):
             parts.append("<i>Label one peak G- and one G+ for the area ratio.</i>")
         parts.append(f"R² = {r.r2:.5f}")
         parts.append(f"χ²<sub>red</sub> = {r.redchi:.4g}")
+        parts.append(self._bic_text())
         parts.append(f"{len(r.x)} points, {r.n_free} free parameters")
         if not r.success:
             parts.append(f"<span style='color:#c00000'>not converged: {r.message}</span>")
@@ -977,6 +993,19 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _model_text(peaks: list[Peak]) -> str:
         return " + ".join(f"{p.kind}({p.label})" if p.label else p.kind for p in peaks)
+
+    def _bic_text(self, *, plain: bool = False) -> str:
+        """``BIC = … (ΔBIC = … vs. <previous model>)`` for the log or the result line."""
+        text = f"BIC = {self.result.bic:.1f}"
+        if self._bic_ref is None:
+            return text
+        model, delta = self._bic_ref
+        verdict = ("better" if delta < -10 else "worse" if delta > 10 else "no clear difference")
+        if plain:
+            return f"{text} (ΔBIC = {delta:+.1f} vs. {model}: {verdict})"
+        colour = "#2e7d32" if delta < -10 else "#c00000" if delta > 10 else "#555"
+        return (f"{text} <span style='color:{colour}'>(ΔBIC = {delta:+.1f} vs. previous fit: "
+                f"{verdict})</span>")
 
     def _metadata(self) -> dict:
         r = self.result

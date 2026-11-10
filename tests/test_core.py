@@ -150,3 +150,18 @@ def test_real_files_fit(path, key):
     summary = r.summary()
     assert np.isfinite(summary["ratio_Gminus_Gplus"])
     assert len(r.table()) == 2
+
+
+def test_bic_prefers_true_model_and_same_data():
+    x, y, _ = _synthetic()
+    rng = default_range(x)
+    metallic = fit(x, y, auto_guess(x, y, preset("metallic"), "linear", rng), "linear", rng)
+    semi = fit(x, y, auto_guess(x, y, preset("semiconducting"), "linear", rng), "linear", rng)
+    n = len(metallic.x)
+    assert metallic.bic == pytest.approx(n * np.log(metallic.chi2 / n)
+                                         + metallic.n_free * np.log(n))
+    assert metallic.bic < semi.bic - 10          # the data were made with a BWF
+    assert metallic.same_data(semi)
+    other = fit(x, y, preset("metallic"), "linear", (rng[0] + 5, rng[1]))
+    assert not metallic.same_data(other)
+    assert metallic.summary()["BIC"] == metallic.bic
