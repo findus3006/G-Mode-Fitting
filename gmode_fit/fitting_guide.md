@@ -1,9 +1,5 @@
 # Fitting guide for the G band of carbon nanotubes
 
-This guide is for students who fit Raman spectra with *G-mode fit* in a lab
-course. It explains what you fit, gives a step-by-step recipe, shows how to tell
-a good fit from a bad one, and lists what to put in your report.
-
 The aim is to get the positions, widths and areas of the G⁻ and G⁺ lines, and
 the area ratio **A(G⁻)/A(G⁺)** with an honest uncertainty.
 
@@ -15,15 +11,15 @@ You can open this guide in the program with **Help → Fitting guide** (F1).
 
 The **G band** of single-walled carbon nanotubes lies between about 1500 and
 1650 cm⁻¹. It comes from C–C stretching vibrations of the graphene lattice. In
-a nanotube it splits into two main lines:
+a nanotube it splits into two main lines [2]:
 
-- **G⁺** at about 1590 cm⁻¹. Its position hardly depends on the tube diameter.
+- **G⁺** at about 1590 cm⁻¹. Its position hardly depends on the tube diameter [1].
 - **G⁻** at a lower wavenumber, typically 1540–1580 cm⁻¹. It moves further down
   for thinner tubes. A rough guide is ω(G⁻) ≈ ω(G⁺) − C/d², with the diameter
   d in nm, C ≈ 48 cm⁻¹·nm² for semiconducting tubes and C ≈ 80 cm⁻¹·nm² for
-  metallic tubes.
+  metallic tubes [1].
 
-The **shape** of G⁻ tells you about the electronic type of the tubes:
+The **shape** of G⁻ tells you about the electronic type of the tubes [1, 3]:
 
 | Tubes in resonance | G⁻ line | Model to use |
 |---|---|---|
@@ -31,18 +27,12 @@ The **shape** of G⁻ tells you about the electronic type of the tubes:
 | Metallic | broad, asymmetric, tail towards **low** wavenumbers | Breit-Wigner-Fano (BWF) |
 
 In metallic tubes the vibration couples to the free electrons. This broadens
-the line, shifts it down and makes it asymmetric (a *Fano* line shape). The
-asymmetry parameter **1/q** is negative for this low-wavenumber tail
-(typically −0.1 to −0.5). With 1/q = 0 the BWF becomes an ordinary Lorentzian.
-
-Other lines you may see:
-
-- **D′** at about 1620 cm⁻¹, a defect-activated line on the high side of G⁺.
-- **D** at about 1330–1350 cm⁻¹, outside the usual G fit range. The ratio of
-  D to G is a separate measure of defects and is not covered here.
+the line, shifts it down and makes it asymmetric (a *Fano* line shape) [3, 4].
+The asymmetry parameter **1/q** is negative for this low-wavenumber tail [3].
+With 1/q = 0 the BWF becomes an ordinary Lorentzian.
 
 **Resonance matters.** Only tubes whose electronic transitions match the laser
-energy give a strong signal. A spectrum taken with another laser shows a
+energy give a strong signal [2]. A spectrum taken with another laser shows a
 different set of tubes. **Only compare samples measured with the same laser.**
 
 ---
@@ -50,17 +40,18 @@ different set of tubes. **Only compare samples measured with the same laser.**
 ## 2  Before you fit: check the data
 
 1. **Spikes.** Cosmic rays produce single, very narrow spikes that are often
-   only one data point wide. The program does not remove them. Choose the fit
-   range so that it avoids them, or ask whether the measurement can be repeated.
+   only one data point wide. The program does not remove them. Remove them with 
+   another tool or ask whether the measurement can be repeated.
    The first and last points of many files are spikes. *Full range* therefore
    leaves out the outer 3 points.
 2. **Saturation.** A flat-topped peak means the detector was saturated. Such
    areas are wrong, so measure again with a shorter exposure or less laser power.
-3. **Calibration.** G⁺ of nanotubes should lie near 1590–1593 cm⁻¹. If it is
+3. **Calibration.** G⁺ of nanotubes should lie near 1590–1593 cm⁻¹ [1, 2]. If it is
    more than a few cm⁻¹ off, the spectrometer calibration is probably shifted.
    Check it with a reference, for example the silicon line at 520.7 cm⁻¹. Enter
    the correction as the **Shift offset**. The program remembers it for each
-   laser wavelength. Write the offset down for your report.
+   laser wavelength. For the A(G⁻)/A(G⁺) term this is not required, so you
+   dont need to calibrate
 4. **Signal-to-noise.** A noisy spectrum cannot support a model with many free
    parameters. Keep the model simple, or measure longer.
 
@@ -88,7 +79,7 @@ different set of tubes. **Only compare samples measured with the same laser.**
    resolution is known. Ask your supervisor, or measure the width of a narrow
    lamp emission line. Use the same value for all peaks and all spectra taken
    with this setup. If you leave it free, it trades off against the Lorentzian
-   width, and both become uncertain.
+   width, and both become uncertain. For now, you can leave it free.
 6. **Auto-guess** the start values. Then look at the **dashed start model**: it
    should roughly follow the data. If it does not, type better start values
    (read the positions off the plot) and check again.
@@ -128,13 +119,13 @@ brings back the previous start values.
 **"At bound" warning.** When a parameter ends exactly on a bound, the fit
 wanted to go further. Its error is then meaningless. Either the bound is too
 tight, so widen it, or the model does not fit the data, so rethink the model.
-Do not report such a fit without saying so.
+Do not report such a fit without saying so. Sometimes hitting a bound is unavoidable.
 
 **Fixing a parameter** (the **Fix** box) keeps it at its value. Only fix a
 parameter for a good reason, such as a known instrument width or a position
 taken from a better measurement. A fixed parameter has no error, and the errors
-of the other parameters then come out smaller. **List every fixed parameter
-and its value in your report.**
+of the other parameters then come out smaller. This would be required when the 
+instrument width was known.
 
 ---
 
@@ -145,17 +136,17 @@ Work through this list for every fit.
 - **Residuals (lower panel).** They should scatter randomly around zero and be
   about the same size everywhere. This is the most important check.
   - A wiggle at one peak position means the line shape is wrong or a peak is
-    missing. Try BWF instead of Voigt for G⁻, or add D′ at about 1620 cm⁻¹.
+    missing. Try BWF instead of Voigt for G⁻.
   - A slope or a smooth curve over the whole range points to the baseline.
     Try a quadratic baseline or a narrower range.
 - **Converged.** A red "not converged" message means the result is not
   reliable.
-- **No parameter at a bound** (orange note).
+- **No parameter at a bound** (orange note). Sometimes unavoidable.
 - **Errors are reasonable.** An error as large as the value itself, such as
   area = 500 ± 600, means the data do not determine that parameter. Remove the
   peak, or fix one of the correlated parameters.
 - **The values make physical sense.** G⁺ should be near 1590 cm⁻¹ and G⁻ below
-  it. A metallic BWF G⁻ is usually several tens of cm⁻¹ wide, with 1/q < 0.
+  it [1]. A metallic BWF G⁻ is clearly broader than G⁺, with 1/q < 0 [3].
   If 1/q comes out positive, the BWF model is probably not appropriate.
 - **The fit is stable.** A second **Fit**, or a fit from slightly different
   start values, should give the same result within the errors.
@@ -165,9 +156,7 @@ Work through this list for every fit.
 - **R²** is almost always above 0.99 for Raman spectra, even for a poor model.
   It barely tells models apart, so **do not choose a model by R²**.
 - **χ²_red** here is the mean squared residual in counts². Its square root,
-  √χ²_red, is the typical size of the residual in counts. Compare it with the
-  noise you can see in a flat part of the spectrum. If √χ²_red is clearly
-  larger than that noise, the model is missing something. Only compare χ²_red
+  √χ²_red, is the typical size of the residual in counts. Only compare χ²_red
   between fits of the same spectrum.
 - **BIC** is used to compare models, see the next section.
 
@@ -176,7 +165,7 @@ Work through this list for every fit.
 ## 6  Choosing between models: ΔBIC
 
 A model with more peaks *always* fits a little better, even if the extra peak
-is not real. The **Bayesian information criterion**
+is not real. The **Bayesian information criterion** [5]
 
   BIC = n · ln(χ²/n) + k · ln(n)    (n data points, k free parameters)
 
@@ -191,11 +180,15 @@ program shows **ΔBIC = BIC(new) − BIC(previous)**:
 | −10 … +10 | the data cannot tell the models apart: keep the simpler or the physically better motivated one |
 | above +10 | the new model is clearly worse |
 
+The limit of 10 is the level that Kass and Raftery call "very strong" evidence
+[6]. They already call differences of 6–10 "strong", so the table above is on
+the cautious side.
+
 **Add a peak only if all three of these are true:**
 
 1. the residual shows structure where the peak would sit,
 2. ΔBIC < −10, and
-3. there is a physical reason for the peak (for example D′ at 1620 cm⁻¹).
+3. there is a physical reason for the peak (for example several CNTs could be resonant at this wavelength).
 
 *Example:* Fit the semiconducting preset, then the metallic preset on the same
 range. If ΔBIC is −40, the BWF describes the G⁻ line clearly better, and you
@@ -217,9 +210,6 @@ have evidence for metallic tubes in resonance.
 - all peaks labelled **G+** are summed in the denominator,
 - peaks with other labels (**D'**, **other**) are **not** included.
 
-So a model of G⁻ + G⁺ + D′ gives A(G⁻)/A(G⁺) without the D′ area. The
-*Area share* column of the table, however, uses the total area of all peaks.
-
 Use several peaks with the same label only when the spectrum clearly needs it.
 An example is a mixed sample with a narrow semiconducting G⁻ (Voigt) and a broad
 metallic G⁻ (BWF), both labelled G-. Keep in mind:
@@ -232,7 +222,7 @@ metallic G⁻ (BWF), both labelled G-. Keep in mind:
   the results export.
 
 **Interpretation.** A larger ratio, together with a BWF-shaped G⁻, means more
-metallic tubes **in resonance with this laser**. The ratio is not the fraction
+metallic tubes **in resonance with this laser** [2]. The ratio is not the fraction
 of metallic tubes in the sample. It depends on the laser, and also on the
 model, range and baseline you chose. Keep all of these the same when you
 compare samples.
@@ -251,18 +241,6 @@ They do **not** include **systematic** uncertainties, which are often larger:
 - the choice of baseline,
 - the choice of line shapes and number of peaks,
 - the calibration.
-
-**Estimate the systematic part yourself.** Repeat the fit with the range
-changed by about ±20 cm⁻¹ on each side, and with a linear and a quadratic
-baseline. The spread of the ratio across these fits is a fair estimate of the
-systematic uncertainty. Report both parts, for example
-
-  A(G⁻)/A(G⁺) = 0.42 ± 0.02 (fit) ± 0.05 (model)
-
-**Repeat measurements.** If you measured several spots on the same sample, fit
-each spectrum with the same settings. Then give the mean and the standard
-deviation. The spread between spots shows how uniform the sample is, and it is
-usually the most realistic uncertainty.
 
 **Rounding.** Give the error with 1–2 significant figures and round the value
 to the same decimal place. The program already does this, so write
@@ -288,13 +266,10 @@ way.
 
 ## 10  What to put in your report
 
-- Laser wavelength, and the calibration offset you used
+- Laser wavelength
 - Fit range and baseline type
 - The model: line shape and label of every peak
-- Fixed parameters with their values, and any bounds you set
-- Fitted positions (for a BWF, the maximum *and* ω₀), FWHM and areas, with errors
 - A(G⁻)/A(G⁺) with its statistical and systematic uncertainty
-- χ²_red, and ΔBIC for every model choice you made
 - A figure with the data, the fit, the components and the residual
   (use *Save figure…* above the plot)
 
@@ -328,7 +303,7 @@ way.
 - **Voigt**: a Lorentzian convolved with a Gaussian, used for a real line
   measured with a real spectrometer.
 - **BWF (Breit-Wigner-Fano)**: an asymmetric line from a vibration coupled to a
-  continuum of electronic states. 1/q sets the asymmetry.
+  continuum of electronic states. 1/q sets the asymmetry [3].
 - **Baseline**: the smooth background under the peaks, for example from
   fluorescence. It is fitted together with the peaks.
 - **Residual**: data minus fit.
@@ -336,3 +311,31 @@ way.
 - **BIC**: Bayesian information criterion, a goodness of fit with a penalty
   for each free parameter.
 - **1σ error**: the standard uncertainty from the fit.
+
+---
+
+## References
+
+1. A. Jorio, A. G. Souza Filho, G. Dresselhaus, M. S. Dresselhaus et al.,
+   "G-band resonant Raman study of 62 isolated single-wall carbon nanotubes",
+   *Phys. Rev. B* **65**, 155412 (2002).
+   [doi:10.1103/PhysRevB.65.155412](https://doi.org/10.1103/PhysRevB.65.155412)
+2. M. S. Dresselhaus, G. Dresselhaus, R. Saito, A. Jorio, "Raman spectroscopy
+   of carbon nanotubes", *Phys. Rep.* **409**, 47–99 (2005). A good overview
+   to start with.
+   [doi:10.1016/j.physrep.2004.10.006](https://doi.org/10.1016/j.physrep.2004.10.006)
+3. S. D. M. Brown, A. Jorio, P. Corio, M. S. Dresselhaus, G. Dresselhaus,
+   R. Saito, K. Kneipp, "Origin of the Breit-Wigner-Fano lineshape of the
+   tangential G-band feature of metallic carbon nanotubes", *Phys. Rev. B*
+   **63**, 155414 (2001).
+   [doi:10.1103/PhysRevB.63.155414](https://doi.org/10.1103/PhysRevB.63.155414)
+4. S. Piscanec, M. Lazzeri, J. Robertson, A. C. Ferrari, F. Mauri, "Optical
+   phonons in carbon nanotubes: Kohn anomalies, Peierls distortions, and
+   dynamic effects", *Phys. Rev. B* **75**, 035427 (2007).
+   [doi:10.1103/PhysRevB.75.035427](https://doi.org/10.1103/PhysRevB.75.035427)
+5. G. Schwarz, "Estimating the dimension of a model", *Ann. Stat.* **6**,
+   461–464 (1978).
+   [doi:10.1214/aos/1176344136](https://doi.org/10.1214/aos/1176344136)
+6. R. E. Kass, A. E. Raftery, "Bayes factors", *J. Am. Stat. Assoc.* **90**,
+   773–795 (1995).
+   [doi:10.1080/01621459.1995.10476572](https://doi.org/10.1080/01621459.1995.10476572)
