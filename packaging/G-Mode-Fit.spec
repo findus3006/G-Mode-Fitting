@@ -14,6 +14,8 @@ a = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],
     pathex=[str(ROOT), str(KPFM_SRC)],
     hiddenimports=["matplotlib.backends.backend_qtagg"],
+    # The fitting guide shown by Help → Fitting guide.
+    datas=[(str(ROOT / "gmode_fit" / "fitting_guide.md"), "gmode_fit")],
     # Not used by the program; keeps the exe smaller.
     excludes=["tkinter", "PyQt5", "PyQt6", "PySide2", "IPython", "jupyter", "notebook",
               "pandas", "pytest", "sphinx", "docutils"],

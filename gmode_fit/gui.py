@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QDockWidget,
     QDoubleSpinBox,
     QFileDialog,
@@ -45,6 +46,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
+    QTextBrowser,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -84,6 +86,7 @@ _LABELS = ("G-", "G+", "D'", "other")
 _COMP_COLOURS = ("tab:blue", "tab:green", "tab:purple", "tab:orange", "tab:brown",
                  "tab:pink", "tab:olive", "tab:cyan")
 _ANALYSIS = "Raman G-mode fit"
+_GUIDE = Path(__file__).with_name("fitting_guide.md")
 
 _PARAM_TIPS = {
     "area": "Integrated intensity of the line (counts·cm⁻¹). For a BWF this is the "
@@ -280,7 +283,9 @@ class MainWindow(QMainWindow):
         self.ctx = AppContext(self, settings=self.settings)
         self.spectrum: Spectrum | None = None
         self._path: Path | None = None
-        self.result: FitResult | None = None
+        self.result: FitResult | None = None          # last fit; kept until the next one
+        self._fit_inputs: dict | None = None          # inputs right after that fit
+        self._fit_params: dict | None = None          # export parameters of that fit
         self._pre_fit: list[Peak] | None = None
         self._last_fit: FitResult | None = None       # reference for ΔBIC
         self._bic_ref: tuple[str, float] | None = None
@@ -467,6 +472,14 @@ class MainWindow(QMainWindow):
             "below −10 the new model is clearly better, above +10 clearly worse;\nin between "
             "the data cannot tell the models apart – prefer the simpler or physically "
             "motivated one.")
+        self.stale_label = QLabel("")
+        self.stale_label.setWordWrap(True)
+        self.stale_label.setTextFormat(Qt.TextFormat.RichText)
+        self.stale_label.setStyleSheet("background: #fff3cd; color: #7a4f00; "
+                                       "border: 1px solid #e0b100; padding: 3px")
+        self.stale_label.setToolTip("The table and the ratio belong to the last fit. The plot "
+                                    "shows the start model of the current settings (dashed).")
+        self.stale_label.hide()
         self.table = QTableWidget(0, 8)
         self.table.setHorizontalHeaderLabels(
             ["Label", "Type", "Maximum (cm⁻¹)", "ω₀ (cm⁻¹)", "FWHM (cm⁻¹)",
@@ -477,6 +490,7 @@ class MainWindow(QMainWindow):
         results = QWidget()
         rlay = QVBoxLayout(results)
         rlay.setContentsMargins(0, 0, 0, 0)
+        rlay.addWidget(self.stale_label)
         rlay.addWidget(self.result_label)
         rlay.addWidget(self.table, 1)
         right = QSplitter(Qt.Orientation.Vertical)
@@ -517,6 +531,9 @@ class MainWindow(QMainWindow):
         act = QAction("&How to use", self)
         act.triggered.connect(self._show_help)
         help_menu.addAction(act)
+        act = QAction("&Fitting guide (for students)", self, shortcut=QKeySequence("F1"))
+        act.triggered.connect(self._show_guide)
+        help_menu.addAction(act)
 
     def _log(self, text: str, level: str) -> None:
         colour = {"warning": "#b36b00", "error": "#c00000"}.get(level, "#222")
@@ -539,7 +556,28 @@ class MainWindow(QMainWindow):
             "4. Fit (Ctrl+F). The fitted values become the new start values; Revert restores "
             "the previous ones. Areas are the full integrals; for a BWF the Lorentzian-"
             "equivalent area π·I₀·Γ/2. Errors are 1σ including parameter correlations.\n\n"
-            "Plot: wheel zoom (Shift: x only, Ctrl: y only), middle-drag pan, Home resets."))
+            "The results stay until the next fit. When you change the model, range, baseline "
+            "or axis afterwards, a yellow note says that they no longer match.\n\n"
+            "Plot: wheel zoom (Shift: x only, Ctrl: y only), middle-drag pan, Home resets.\n\n"
+            "Help → Fitting guide (F1) explains how to get a reliable fit."))
+
+    def _show_guide(self) -> None:
+        if getattr(self, "_guide", None) is None:
+            try:
+                text = _GUIDE.read_text(encoding="utf-8")
+            except OSError as exc:
+                QMessageBox.warning(self, "Fitting guide", f"Guide not found:\n{exc}")
+                return
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Fitting guide")
+            browser = QTextBrowser()
+            browser.setOpenExternalLinks(True)
+            browser.setMarkdown(text)
+            QVBoxLayout(dialog).addWidget(browser)
+            dialog.resize(820, 900)
+            self._guide = dialog
+        self._guide.show()
+        self._guide.raise_()
 
     # ================================================================ files
     def open_dialog(self) -> None:
@@ -615,8 +653,11 @@ class MainWindow(QMainWindow):
         self._path = path
         if not self._reload_axis():
             return False
+        # A fit of another spectrum must not be exported with this file's name.
         self.result = None
+        self._fit_inputs = self._fit_params = None
         self._pre_fit = None
+        self._update_results()
         lo, hi = default_range(self.spectrum.shift)
         self._set_range(lo, hi, redraw=False)
         self._setup_plot()
@@ -682,7 +723,6 @@ class MainWindow(QMainWindow):
             self._set_range(lo + delta, hi + delta, redraw=False)
         else:
             self._set_range(*default_range(self.spectrum.shift), redraw=False)
-        self.result = None
         self._setup_plot()
         self._model_changed()
 
@@ -786,7 +826,6 @@ class MainWindow(QMainWindow):
         guessed = auto_guess(self.spectrum.shift, self.spectrum.y, peaks,
                              self.baseline_box.currentText(), self._range())
         self.set_peaks(guessed)
-        self.result = None
         self._model_changed()
 
     def run_fit(self) -> None:
@@ -814,7 +853,10 @@ class MainWindow(QMainWindow):
         self._pre_fit = peaks
         self.result = result
         self.set_peaks(result.peaks, result.errors)
-        level = self.ctx.log.info if result.success else self.ctx.log.warning
+        # Snapshot of the inputs as shown now: later edits are compared with it.
+        self._fit_inputs = self._inputs()
+        self._fit_params = self._parameters(result.peaks)
+        level =self.ctx.log.info if result.success else self.ctx.log.warning
         level(f"Fit {'converged' if result.success else 'did not converge'} "
               f"({result.nfev} evaluations): {self._model_text(result.peaks)}: "
               f"R² = {result.r2:.5f}, χ²_red = {result.redchi:.4g}, "
@@ -829,15 +871,74 @@ class MainWindow(QMainWindow):
         if self._pre_fit is None:
             return
         self.set_peaks(self._pre_fit)
-        self.result = None
         self._model_changed()
 
     def _model_changed(self) -> None:
-        """Start values / range / baseline changed: the shown fit is no longer valid."""
-        if self.result is not None:
-            self.result = None
+        """Start values / range / baseline / axis changed.
+
+        The results of the last fit stay in the table until the next fit; a
+        note tells when they no longer match the inputs, and the plot then
+        shows the start model of the current inputs.
+        """
         self._update_plot()
-        self._update_results()
+        self._update_stale()
+
+    # ------------------------------------------------------- fit vs. inputs
+    def _inputs(self) -> dict:
+        """Everything a fit depends on, as currently entered (``peaks`` None if invalid)."""
+        try:
+            peaks = self.peaks()
+        except ValueError:
+            peaks = None
+        return {
+            "file": self._path,
+            "laser": self.laser_spin.value(),
+            "x axis unit": self.unit_box.currentData(),
+            "shift offset": self.offset_spin.value(),
+            "fit range": self._range(),
+            "baseline": self.baseline_box.currentText(),
+            "peaks": peaks,
+        }
+
+    def changed_inputs(self) -> list[str]:
+        """What differs from the inputs of the shown fit (empty: the fit matches)."""
+        if self.result is None or self._fit_inputs is None:
+            return []
+        now, then = self._inputs(), self._fit_inputs
+        changed = [k for k in now if k != "peaks" and now[k] != then[k]]
+        new, old = now["peaks"], then["peaks"]
+        if new is None:
+            changed.append("invalid peak value")
+        elif len(new) != len(old):
+            changed.append("number of peaks")
+        else:
+            for i, (a, b) in enumerate(zip(old, new), 1):
+                if a == b:
+                    continue
+                if a.kind != b.kind:
+                    changed.append(f"peak {i} type")
+                    continue
+                spec = PEAK_KINDS[a.kind]
+                what = ["label"] if a.label != b.label else []
+                what += [lab for name, lab in zip(spec.params, spec.labels)
+                         if a.params[name] != b.params[name]]
+                changed.append(f"peak {i}: " + ", ".join(what))
+        return changed
+
+    def fit_is_current(self) -> bool:
+        """``True`` when a fit is shown and the inputs are still those of that fit."""
+        return self.result is not None and not self.changed_inputs()
+
+    def _update_stale(self) -> None:
+        changed = self.changed_inputs()
+        if changed:
+            self.stale_label.setText(
+                "⚠ <b>The settings no longer match the fit results below</b> (changed: "
+                + ", ".join(changed).replace("<", "&lt;")
+                + "). The table shows the last fit and the plot the new start model (dashed). "
+                  "Press <b>Fit</b> (Ctrl+F) to update the results.")
+        self.stale_label.setVisible(bool(changed))
+        self.table.setStyleSheet("QTableWidget { color: #888; }" if changed else "")
 
     # ================================================================= plot
     def _setup_plot(self) -> None:
@@ -905,7 +1006,7 @@ class MainWindow(QMainWindow):
 
     def _curves(self):
         """``(x, y, total, comps, base, peaks, fitted)`` of the result or the start model."""
-        if self.result is not None:
+        if self.fit_is_current():
             r = self.result
             return r.x, r.y, r.best, r.components, r.baseline_curve, r.peaks, True
         try:
@@ -929,6 +1030,7 @@ class MainWindow(QMainWindow):
             self.result_label.setText("<i>No fit yet – adjust the start values and press "
                                       "Fit (Ctrl+F). Dashed: start model.</i>"
                                       if self.spectrum is not None else "")
+            self._update_stale()
             return
         self.table.setRowCount(len(r.peaks))
         total_area = sum(p.params["area"].value for p in r.peaks)
@@ -967,14 +1069,17 @@ class MainWindow(QMainWindow):
             parts.append("<span style='color:#b36b00'>at bound: "
                          + ", ".join(r.at_bounds) + "</span>")
         self.result_label.setText(" &nbsp;|&nbsp; ".join(parts))
+        self._update_stale()
 
-    def _parameters(self) -> dict:
+    def _parameters(self, peaks: list[Peak] | None = None) -> dict:
+        """Current settings and ``peaks`` (default: as entered) for the export metadata."""
         lo, hi = self._range()
         spec = self.spectrum
-        try:
-            peaks = self.result.peaks if self.result else self.peaks()
-        except ValueError:
-            peaks = []
+        if peaks is None:
+            try:
+                peaks = self.peaks()
+            except ValueError:
+                peaks = []
         params = {
             "laser_nm": spec.laser_nm if spec else None,
             "file_x_unit": spec.unit if spec else None,
@@ -1007,15 +1112,33 @@ class MainWindow(QMainWindow):
         return (f"{text} <span style='color:{colour}'>(ΔBIC = {delta:+.1f} vs. previous fit: "
                 f"{verdict})</span>")
 
-    def _metadata(self) -> dict:
-        r = self.result
-        results = r.summary() if r is not None else None
+    def _metadata(self, *, last_fit: bool = False) -> dict:
+        """Metadata of what the plot shows, or (``last_fit``) of the last fit and its settings."""
+        r = self.result if (last_fit or self.fit_is_current()) else None
+        results = None
         if r is not None:
+            results = r.summary()
             results["baseline_coeffs"] = list(r.baseline_coeffs)
             results["baseline_x_ref"] = r.x_ref
+        params = self._fit_params if r is not None else self._parameters()
         return build_metadata(_ANALYSIS, sources=[self.spectrum.path] if self.spectrum else [],
-                              parameters=self._parameters(), results=results,
+                              parameters=params, results=results,
                               software=f"gmode_fit {__version__}")
+
+    def _confirm_last_fit(self, title: str) -> bool:
+        """Ask before exporting a fit whose inputs have been changed since."""
+        changed = self.changed_inputs()
+        if not changed:
+            return True
+        answer = QMessageBox.question(
+            self, title,
+            "The settings have changed since the last fit (" + ", ".join(changed) + ").\n\n"
+            "Export the results of the last fit anyway? They are saved with the settings "
+            "that were used for that fit.\n\nChoose No and press Fit to fit the current "
+            "settings first.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        return answer == QMessageBox.StandardButton.Yes
 
     def _stem(self) -> str:
         return self.spectrum.path.stem if self.spectrum else "gmode_fit"
@@ -1046,13 +1169,15 @@ class MainWindow(QMainWindow):
         if self.result is None:
             QMessageBox.information(self, "Export results", "Fit the spectrum first.")
             return
+        if not self._confirm_last_fit("Export results"):
+            return
         path = self.ctx.save_file_dialog("Export results", f"{self._stem()}_fit.csv",
                                          "CSV file (*.csv)")
         if not path:
             return
         path = Path(path).with_suffix(".csv")
         try:
-            write_table_csv(path, self.result.table(), self._metadata())
+            write_table_csv(path, self.result.table(), self._metadata(last_fit=True))
         except Exception as exc:
             QMessageBox.warning(self, "Export results", f"Could not write the file:\n{exc}")
             return
@@ -1081,15 +1206,16 @@ class MainWindow(QMainWindow):
         return path
 
     def summary_row(self) -> dict:
-        """The row added to the summary CSV for the current fit."""
-        lo, hi = self._range()
+        """The row added to the summary CSV for the last fit (with that fit's settings)."""
+        settings = self._fit_params
+        lo, hi = settings["range_cm-1"]
         spec = self.spectrum
         row = {
             "file": spec.name,
             "folder": str(spec.path.parent),
             "fitted": _dt.datetime.now().isoformat(timespec="seconds"),
-            "laser_nm": spec.laser_nm,
-            "shift_offset_cm-1": self.offset_spin.value(),
+            "laser_nm": settings["laser_nm"],
+            "shift_offset_cm-1": settings["shift_offset_cm-1"],
             "range_min_cm-1": lo,
             "range_max_cm-1": hi,
             "baseline": self.result.baseline,
@@ -1101,6 +1227,8 @@ class MainWindow(QMainWindow):
     def append_summary(self) -> None:
         if self.result is None:
             QMessageBox.information(self, "Summary", "Fit the spectrum first.")
+            return
+        if not self._confirm_last_fit("Summary"):
             return
         path = self._summary_path() or self._choose_summary()
         if path is None:

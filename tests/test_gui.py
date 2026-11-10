@@ -5,7 +5,7 @@ import pytest
 from matplotlib.backend_bases import MouseButton, MouseEvent
 from PySide6.QtCore import QMimeData, QPointF, QSettings, Qt, QUrl
 from PySide6.QtGui import QDropEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox, QTextBrowser
 
 from gmode_fit.fitting import preset
 from gmode_fit.gui import MainWindow, append_row
@@ -167,3 +167,62 @@ def test_delta_bic_against_previous_fit(window):
     window._set_range(lo + 5, hi)
     window.run_fit()
     assert window._bic_ref is None
+
+
+@needs_data
+def test_results_kept_until_next_fit(window, tmp_path, monkeypatch):
+    window.load_file(DATA / "Probe1_633nm_G.txt")
+    window.run_fit()
+    first = window.result
+    assert window.fit_is_current() and window.stale_label.isHidden()
+    centre = window.editors[1].rows["center"]["value"]
+    old = centre.text()
+
+    # editing a start value keeps the table but flags it
+    centre.setText("1600")
+    centre.editingFinished.emit()
+    assert window.result is first and window.table.rowCount() == 2
+    assert window.changed_inputs() == ["peak 2: Position ω₀"]
+    assert not window.stale_label.isHidden()
+    assert window._curves()[-1] is False                  # plot shows the start model
+
+    # changing it back: the fit matches again
+    centre.setText(old)
+    centre.editingFinished.emit()
+    assert window.fit_is_current() and window.stale_label.isHidden()
+
+    # range and baseline changes are flagged as well
+    lo, hi = window._range()
+    window._set_range(lo + 5, hi)
+    window.baseline_box.setCurrentText("quadratic")
+    assert window.changed_inputs() == ["fit range", "baseline"]
+
+    # exports of a stale fit ask first and use the settings of that fit
+    asked = []
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question",
+                        lambda *a, **k: asked.append(a) or QMessageBox.StandardButton.No)
+    summary = tmp_path / "summary.csv"
+    window.settings.setValue("summary_path", str(summary))
+    window.append_summary()
+    assert asked and not summary.exists()
+    monkeypatch.setattr("PySide6.QtWidgets.QMessageBox.question",
+                        lambda *a, **k: QMessageBox.StandardButton.Yes)
+    window.append_summary()
+    row = next(csv.DictReader(summary.open(encoding="utf-8")))
+    assert float(row["range_min_cm-1"]) == pytest.approx(lo) and row["baseline"] == "linear"
+
+    # a new fit replaces the results and clears the note
+    window.run_fit()
+    assert window.result is not first and window.fit_is_current()
+    assert window.stale_label.isHidden()
+
+    # a new file clears the results of the old one
+    window.load_file(DATA / "Probe2_633nm_G.txt")
+    assert window.result is None and window.table.rowCount() == 0
+
+
+def test_guide_opens(window):
+    window._show_guide()
+    assert window._guide.isVisible()
+    text = window._guide.findChild(QTextBrowser).toPlainText()
+    assert "Fitting guide" in text

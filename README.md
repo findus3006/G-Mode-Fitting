@@ -6,6 +6,9 @@ Breit-Wigner-Fano (BWF) lines plus a polynomial baseline. It reports the
 integrated areas of G⁻ and G⁺ with 1σ errors and their ratio, which helps
 tell metallic from semiconducting tubes.
 
+**Students:** read the [fitting guide](gmode_fit/fitting_guide.md) first. It is
+also in the program under *Help → Fitting guide* (F1).
+
 ## Start
 
 ```bash
@@ -44,6 +47,10 @@ when it sits next to this folder and is not installed.
 4. **Fit** (Ctrl+F). The fitted values become the new start values, and *Revert*
    restores the previous ones. Parameters that end on a bound are reported, because
    their errors are then unreliable.
+   - The results table stays until the next fit. If you change a peak parameter, the
+     range, the baseline or the axis afterwards, a yellow note lists what no longer
+     matches, and the plot shows the new start model. Exporting such a fit asks first,
+     and then saves it with the settings that were used for it.
    - **BIC** (n·ln(χ²/n) + k·ln n) appears in the log and above the table, with
      **ΔBIC against the previous fit** when it used the same data points (same file,
      offset and range). Below −10 the new model is clearly better, above +10 clearly
